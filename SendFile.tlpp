@@ -1,0 +1,43 @@
+#Include 'tlpp-core.th'
+
+User Function SendFile()
+
+    Local oRest := FwRest():New( 'http://localhost:8080/rest' ) as Object // Instancia a classe FwRest setando a URL base
+    Local jJsonBody := JsonObject():New() as Json
+    Local jJsonRet := JsonObject():New() as Json
+    
+    // Caminho do arquivo
+    Local oFile := FWFileReader():New("/nvm-setup.exe") as Object
+
+    // Define o EndPoint a ser utilizado
+    oRest:SetPath('/DwFiles/send')
+
+    If oFile:Open()
+
+        jJsonBody['fileName'] := 'nvm-setup.exe'
+        jJsonBody['rawFile'] := Encode64( oFile:FullRead() )
+
+        // Define o Body da requisição
+        oRest:SetPostParams( jJsonBody:ToJson() )
+
+        // Realiza a requisição POST enviando o cabeçalho e o body recebido por parâmetro
+        If oRest:Post()
+
+            // oRest:GetResult() retorna o Json devolvido pela API
+            // Aqui utilizamos o método FromJson para converter o Json (texto) para Json (Objeto)
+            jJsonRet:FromJson( oRest:GetResult() )
+
+        Else
+
+            // Retorna detalhes do erro
+            jJsonRet:FromJson( oRest:GetLastError() )
+
+        EndIf
+
+    Else
+
+        ConOut('Falha na abertura do arquivo!')
+
+    EndIf
+
+Return

@@ -1,0 +1,123 @@
+#Include 'tlpp-core.th'
+#Include 'tlpp-rest.th'
+
+Class DwFiles
+    
+    Public Method New()
+
+    @Post('/DwFiles/send')
+    Public Method Send() as Logical
+
+    @Post('/DwFiles/send/v2')
+    Public Method SendV2() as Logical
+
+    @Get('/DwFiles/download/:fileName')
+    Public Method Download() as Logical
+
+EndClass
+
+
+Method New() Class DwFiles
+
+Return self
+
+
+// Realiza o Envio de um arquivo pequeno - testado com até 3 MB
+Method Send() Class DwFiles
+
+    Local lRet := .T. as Logical
+    Local cBody := oRest:getBodyRequest() as Character
+    Local jBody := JsonObject():New() as Json
+    Local oFile as Object
+    Local fileDecoded as Character
+
+    jBody:FromJson(cBody)
+
+    // Define o caminho onde o arquivo será gravado
+    oFile := FwFileWriter():New('/files/' + jBody['fileName'], .T.)
+
+    // Cria o arquivo no disco
+    If oFile:Create()
+
+        // Converte o arquivo
+        fileDecoded := Decode64(jBody['rawFile'])
+
+        oFile:Write(fileDecoded) // Grava os dados do arquivo
+        oFile:Close() // Fecha o arquivo
+
+        // Devolve mensagem de retorno com sucesso
+        oRest:setResponse('[{"message": "Upload do arquivo ' + jBody['fileName'] + ' realizado com sucesso!"}]')
+        lRet := .T.
+
+    Else
+
+        SetRestFault(500, 'Falha no upload do arquivo!')
+        lRet := .F.
+       
+    EndIf
+
+Return lRet
+
+
+// Realiza o Envio de um arquivo grande - Testado com 135 MB
+// O Arquivo vai sempre para a pasta %RootPath%/http-root/HTTPREST/HTTPURI
+Method SendV2() Class DwFiles
+
+    Local lRet := .T. as Logical
+    Local cBody := oRest:getBodyRequest() as Character
+    Local jBody := JsonObject():New() as Json
+
+    jBody:FromJson(cBody)
+
+    // Se a key Success = .T. o upload ocorreu com sucesso
+    If jBody['Success']
+
+        // Devolve mensagem de retorno com sucesso
+        // Caso receba mais de um arquivo o jBody['Elements'] terá mais de uma posição, é possível usar o Len() para conhecer o tamanhoa
+        oRest:setResponse('[{"message": "Upload do arquivo ' + jBody['Elements'][1]['FileName'] + ' realizado com sucesso!"}]')
+        lRet := .T.
+
+    Else
+
+        SetRestFault(500, 'Falha no upload do arquivo!')
+        lRet := .F.
+       
+    EndIf
+
+Return lRet
+
+
+// Realiza o Download de um arquivo
+Method Download() Class DwFiles
+
+    Local lRet := .T. as Logical
+    Local jPath := oRest:getPathParamsRequest() as Json // Recebe o PathParam em formato Json
+    Local cFileDownload as Character
+    Local oFile := FwFileReader():New('files/' + jPath['fileName']) as Object
+    
+    // cabeçalho com os dados do arquivo de retorno
+    Local cHeader := '{"Content-Disposition": "attachment; filename=' + jPath["fileName"] + '"}' as Character
+    Local jHeader := JsonObject():New() as Json
+
+    // Tentativa de abertura do arquivo
+    If ( oFile:Open() )
+
+        cFileDownload := oFile:FullRead()
+
+        jHeader:FromJson(cHeader)
+        
+        oRest:setHeaderResponse(jHeader)
+
+        // Devolve o conteúdo do arquivo bruto para download
+        oRest:setResponse(cFileDownload)
+        lRet := .T.
+
+    Else
+
+        SetRestFault(500, 'Arquivo não encontrado')
+        lRet := .F.
+
+    EndIf
+
+return lRet
+
